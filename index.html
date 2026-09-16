@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>해양사고 통계 조회</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f5f7fb;
+    color: #1f2937;
+  }
+  .wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px 16px 40px;
+  }
+  h1 { margin: 0 0 8px; font-size: 28px; }
+  .sub { margin: 0 0 20px; color: #6b7280; line-height: 1.6; }
+  .toolbar {
+    display: grid;
+    grid-template-columns: 1fr 220px auto;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  input, select, button {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 15px;
+    background: white;
+  }
+  button {
+    width: auto;
+    cursor: pointer;
+    background: #111827;
+    color: white;
+    border-color: #111827;
+  }
+  .meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    border-radius: 10px;
+    background: white;
+    border: 1px solid #e5e7eb;
+  }
+  .count { font-weight: 700; }
+  .source { color: #6b7280; font-size: 14px; }
+  .table-box {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #eef0f3;
+    text-align: right;
+    white-space: nowrap;
+    font-size: 14px;
+  }
+  th:first-child, td:first-child { text-align: left; }
+  th { background: #f9fafb; position: sticky; top: 0; z-index: 1; }
+  tr:last-child td { border-bottom: 0; }
+  .empty {
+    padding: 36px 16px;
+    text-align: center;
+    color: #6b7280;
+  }
+
+  @media (max-width: 700px) {
+    .wrap { padding: 18px 12px 28px; }
+    h1 { font-size: 23px; }
+    .toolbar { grid-template-columns: 1fr; }
+    button { width: 100%; }
+
+    .table-box {
+      border: none;
+      background: transparent;
+      overflow: visible;
+    }
+    table, thead, tbody, th, td, tr {
+      display: block;
+      width: 100%;
+    }
+    thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+    tbody { display: grid; gap: 12px; }
+    tr {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    td {
+      display: grid;
+      grid-template-columns: minmax(110px, 42%) 1fr;
+      gap: 12px;
+      align-items: start;
+      text-align: right;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      border-bottom: 1px solid #f0f1f3;
+      padding: 8px 0;
+    }
+    td:first-child { text-align: right; }
+    td:last-child { border-bottom: none; }
+    td::before {
+      content: attr(data-label);
+      text-align: left;
+      font-weight: 700;
+      color: #4b5563;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>해양사고 통계 조회</h1>
+  <p class="sub">연도 또는 사고 유형으로 검색하고, 연도 필터를 적용할 수 있습니다.</p>
+
+  <div class="toolbar">
+    <input id="searchInput" type="search" placeholder="예: 2010, 충돌, 기관손상" aria-label="연도 또는 사고 유형 검색" />
+    <select id="yearFilter" aria-label="연도 필터">
+      <option value="">전체 연도</option>
+    </select>
+    <button id="resetBtn" type="button">초기화</button>
+  </div>
+
+  <div class="meta">
+    <div class="count" id="countText">0 / 0건</div>
+    <div class="source">출처: 첨부 data.json · 기준 시점: 파일 수록 기간</div>
+  </div>
+
+  <div class="table-box">
+    <table aria-label="해양사고 통계 표">
+      <thead><tr id="headRow"></tr></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div id="emptyState" class="empty" hidden>조건에 맞는 데이터가 없습니다.</div>
+  </div>
+</div>
+
+<script>
+const FALLBACK_DATA = [{"시점":1998,"총계":772,"충돌":147,"접촉":5,"좌초":77,"전복":14,"화재/폭발":60,"침몰":84,"행방불명":4,"기관손상":242,"추진기손상":24,"키손상":10,"속구손상":2,"조난":48,"시설물손상":4,"인명사상":8,"안전운항저해":43,"해양오염":0,"기타":0},{"시점":1999,"총계":849,"충돌":173,"접촉":2,"좌초":68,"전복":27,"화재/폭발":67,"침몰":90,"행방불명":4,"기관손상":269,"추진기손상":18,"키손상":15,"속구손상":2,"조난":24,"시설물손상":2,"인명사상":13,"안전운항저해":73,"해양오염":2,"기타":0},{"시점":2000,"총계":634,"충돌":130,"접촉":11,"좌초":58,"전복":19,"화재/폭발":48,"침몰":63,"행방불명":2,"기관손상":196,"추진기손상":8,"키손상":5,"속구손상":1,"조난":23,"시설물손상":0,"인명사상":19,"안전운항저해":51,"해양오염":0,"기타":0},{"시점":2001,"총계":610,"충돌":141,"접촉":15,"좌초":60,"전복":21,"화재/폭발":62,"침몰":72,"행방불명":1,"기관손상":135,"추진기손상":8,"키손상":6,"속구손상":1,"조난":25,"시설물손상":1,"인명사상":17,"안전운항저해":44,"해양오염":1,"기타":0},{"시점":2002,"총계":557,"충돌":184,"접촉":13,"좌초":58,"전복":29,"화재/폭발":42,"침몰":55,"행방불명":0,"기관손상":110,"추진기손상":9,"키손상":3,"속구손상":0,"조난":18,"시설물손상":3,"인명사상":20,"안전운항저해":13,"해양오염":0,"기타":0},{"시점":2003,"총계":531,"충돌":182,"접촉":9,"좌초":65,"전복":22,"화재/폭발":53,"침몰":50,"행방불명":2,"기관손상":57,"추진기손상":12,"키손상":1,"속구손상":2,"조난":21,"시설물손상":0,"인명사상":43,"안전운항저해":12,"해양오염":0,"기타":0},{"시점":2004,"총계":804,"충돌":210,"접촉":12,"좌초":75,"전복":35,"화재/폭발":57,"침몰":69,"행방불명":1,"기관손상":147,"추진기손상":17,"키손상":12,"속구손상":0,"조난":45,"시설물손상":1,"인명사상":80,"안전운항저해":42,"해양오염":1,"기타":0},{"시점":2005,"총계":658,"충돌":172,"접촉":10,"좌초":46,"전복":22,"화재/폭발":71,"침몰":45,"행방불명":1,"기관손상":166,"추진기손상":17,"키손상":14,"속구손상":0,"조난":16,"시설물손상":2,"인명사상":34,"안전운항저해":41,"해양오염":1,"기타":0},{"시점":2006,"총계":657,"충돌":167,"접촉":17,"좌초":66,"전복":16,"화재/폭발":41,"침몰":25,"행방불명":0,"기관손상":195,"추진기손상":11,"키손상":14,"속구손상":0,"조난":11,"시설물손상":1,"인명사상":20,"안전운항저해":68,"해양오염":5,"기타":0},{"시점":2007,"총계":566,"충돌":148,"접촉":9,"좌초":39,"전복":21,"화재/폭발":37,"침몰":19,"행방불명":1,"기관손상":185,"추진기손상":4,"키손상":17,"속구손상":0,"조난":8,"시설물손상":1,"인명사상":11,"안전운항저해":65,"해양오염":1,"기타":0},{"시점":2008,"총계":480,"충돌":125,"접촉":15,"좌초":32,"전복":8,"화재/폭발":25,"침몰":18,"행방불명":0,"기관손상":145,"추진기손상":7,"키손상":14,"속구손상":0,"조난":11,"시설물손상":2,"인명사상":17,"안전운항저해":61,"해양오염":0,"기타":0},{"시점":2009,"총계":723,"충돌":160,"접촉":10,"좌초":43,"전복":18,"화재/폭발":34,"침몰":22,"행방불명":2,"기관손상":253,"추진기손상":16,"키손상":29,"속구손상":0,"조난":16,"시설물손상":1,"인명사상":21,"안전운항저해":96,"해양오염":2,"기타":0},{"시점":2010,"총계":737,"충돌":174,"접촉":22,"좌초":64,"전복":17,"화재/폭발":25,"침몰":22,"행방불명":0,"기관손상":236,"추진기손상":8,"키손상":24,"속구손상":1,"조난":9,"시설물손상":4,"인명사상":33,"안전운항저해":91,"해양오염":7,"기타":0},{"시점":2011,"총계":946,"충돌":208,"접촉":23,"좌초":64,"전복":38,"화재/폭발":57,"침몰":27,"행방불명":0,"기관손상":261,"추진기손상":13,"키손상":18,"속구손상":1,"조난":41,"시설물손상":4,"인명사상":82,"안전운항저해":101,"해양오염":8,"기타":0},{"시점":2012,"총계":726,"충돌":157,"접촉":21,"좌초":53,"전복":25,"화재/폭발":55,"침몰":26,"행방불명":11,"기관손상":178,"추진기손상":7,"키손상":13,"속구손상":0,"조난":44,"시설물손상":3,"인명사상":57,"안전운항저해":68,"해양오염":8,"기타":0}];
+let rows = [];
+let headers = [];
+const yearFilter = document.getElementById('yearFilter');
+const searchInput = document.getElementById('searchInput');
+const tableBody = document.getElementById('tableBody');
+const headRow = document.getElementById('headRow');
+const countText = document.getElementById('countText');
+const emptyState = document.getElementById('emptyState');
+
+function getHeaders(data) {
+  const set = new Set();
+  data.forEach(row => Object.keys(row).forEach(k => set.add(k)));
+  return Array.from(set);
+}
+
+function buildUI(data) {
+  rows = data;
+  headers = getHeaders(rows);
+  headRow.innerHTML = headers.map(h => `<th>${escapeHtml(h)}</th>`).join('');
+  const years = [...new Set(rows.map(r => String(r['시점'] ?? '')))].filter(Boolean).sort((a,b) => Number(a) - Number(b));
+  yearFilter.innerHTML = '<option value="">전체 연도</option>' + years.map(y => `<option value="${escapeAttr(y)}">${escapeHtml(y)}년</option>`).join('');
+  render();
+}
+
+function render() {
+  const q = searchInput.value.trim().toLowerCase();
+  const selectedYear = yearFilter.value;
+  const filtered = rows.filter(row => {
+    const year = String(row['시점'] ?? '');
+    if (selectedYear && year !== selectedYear) return false;
+    if (!q) return true;
+    if (year.toLowerCase().includes(q)) return true;
+    for (const key of headers) {
+      if (key === '시점' || key === '총계') continue;
+      if (key.toLowerCase().includes(q)) {
+        const value = Number(row[key] ?? 0);
+        return value > 0;
+      }
+    }
+    return false;
+  });
+  countText.textContent = `현재 ${filtered.length}건 / 전체 ${rows.length}건`;
+  tableBody.innerHTML = filtered.map(row => '<tr>' + headers.map(h => {
+    const value = row[h] ?? '';
+    const display = typeof value === 'number' ? value.toLocaleString('ko-KR') : escapeHtml(String(value));
+    return `<td data-label="${escapeAttr(h)}">${display}</td>`;
+  }).join('') + '</tr>').join('');
+  emptyState.hidden = filtered.length !== 0;
+}
+
+function escapeHtml(v) {
+  return String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
+}
+function escapeAttr(v) { return escapeHtml(v); }
+
+searchInput.addEventListener('input', render);
+yearFilter.addEventListener('change', render);
+document.getElementById('resetBtn').addEventListener('click', () => {
+  searchInput.value = '';
+  yearFilter.value = '';
+  render();
+});
+
+fetch('./data.json', { cache: 'no-store' })
+  .then(r => {
+    if (!r.ok) throw new Error('data.json load failed');
+    return r.json();
+  })
+  .then(buildUI)
+  .catch(() => buildUI(FALLBACK_DATA));
+</script>
+</body>
+</html>
